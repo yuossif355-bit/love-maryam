@@ -80,6 +80,13 @@
   .role-btns .btn { padding: 18px; font-size: 1.2rem; }
   .note { font-size: .88rem; color: var(--gold); }
   .qitem:disabled, .btn:disabled { opacity: .4; cursor: default; }
+  .inner { display: grid; gap: 16px; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .modes button { padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.05); font-weight: 700; }
+  .modes button[aria-pressed="true"] { background: var(--gold); color: #2a0f36; border-color: transparent; }
+  .vote-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .vote-btns .btn { padding: 22px 10px; font-size: 1.25rem; }
+  .vres { font-weight: 700; padding: 10px 14px; border-radius: 12px; background: rgba(255,215,0,.1); border: 1px solid var(--line); text-align: center; }
   .err { color: #ff8aa8; min-height: 1.4em; font-size: .9rem; }
 
   /* ---------- room ---------- */
@@ -192,6 +199,12 @@
 
     <div class="layout">
       <div id="panel-play" class="glass panel">
+        <div class="modes" role="group" aria-label="نوع اللعبة">
+          <button id="mode-q" aria-pressed="true">اسأل التاني</button>
+          <button id="mode-v" aria-pressed="false">مين فينا؟</button>
+        </div>
+
+      <div id="mode-ask" class="inner">
         <div id="stage" class="stage"></div>
 
         <div>
@@ -213,6 +226,18 @@
           <summary>اللي جاوبناه قبل كده (<span id="hist-n">0</span>)</summary>
           <div id="hist" class="hist-list"></div>
         </details>
+      </div>
+
+      <div id="mode-vote" class="inner" hidden>
+        <div id="vstage" class="stage"></div>
+        <div class="section-h">
+          <h3>دوس على سؤال، وإنتوا الاتنين تختاروا</h3>
+          <button id="v-random" class="btn ghost small">سؤال عشوائي</button>
+        </div>
+        <div id="vnote" class="note" hidden></div>
+        <div id="vlist" class="qlist"></div>
+        <div id="vstats" class="note"></div>
+      </div>
       </div>
 
       <div id="panel-chat" class="glass chat" hidden>
@@ -345,6 +370,8 @@ const store = {
   set(k, v) { try { localStorage.setItem('sara7a:' + k, JSON.stringify(v)); } catch (e) {} }
 };
 
+const VQS = ["مين فينا بيحب التاني أكتر؟", "مين فينا بيغير أكتر؟", "مين فينا بيزعل بسرعة؟", "مين فينا بيعتذر الأول؟", "مين فينا بيوحش التاني أكتر لما بنبعد؟", "مين فينا بيتأخر في الرد أكتر؟", "مين فينا أكتر واحد رومانسي؟", "مين فينا أعند؟", "مين فينا بيسامح أسرع؟", "مين فينا بيفتكر التواريخ المهمة أكتر؟", "مين فينا بيبدأ الكلام بعد الخناقة؟", "مين فينا بيقول كلمة بحبك أكتر؟", "مين فينا أكتر واحد بيفكر في التاني؟", "مين فينا بيتضايق من حاجات صغيرة أكتر؟", "مين فينا بيخبي مشاعره أكتر؟", "مين فينا أكتر واحد بيضحك التاني؟", "مين فينا أكتر واحد بيسمع كلام التاني؟", "مين فينا اللي بيكسب في الجدال؟", "مين فينا بيستحمل التاني أكتر؟",  "مين فينا بيتكسف أكتر؟", "مين فينا بيعمل مفاجآت أكتر؟", "مين فينا بينسى أكتر؟", "مين فينا أكتر واحد بيقلق على التاني؟", "مين فينا بيشتري هدايا أحلى؟", "مين فينا بيصحى بدري أكتر؟",  "مين فينا بيعيط أسرع؟", "مين فينا بيحب يتكلم أكتر؟", "مين فينا أكتر واحد صبره طويل؟", "مين فينا اللي أحلى ضحكته؟", "مين فينا بيتحمس أكتر لمستقبلنا؟", "مين فينا بيقول الحقيقة حتى لو هتضايق؟", "مين فينا اللي بيبدأ يتصل أكتر؟", "مين فينا اللي بيتنازل أكتر؟", "مين فينا اللي أكلته أحسن؟", "مين فينا بيحب التاني من غير ما يقول؟", "مين فينا اللي هيبقى أحسن أب أو أم؟", "مين فينا بيتخيل لحظات حلوة كتير عن علاقتنا؟", "مين فينا اللي بيتغير عشان التاني أكتر؟"].map((text, i) => ({ id: 'v' + i, text }));
+
 /* ================= الحالة ================= */
 const ROOM = 'sara7a-maryam-youssef-k7x2q9';      // غرفة ثابتة: مفيش كود
 const NAMES = { y: 'يوسف', m: 'مريم' };
@@ -358,6 +385,11 @@ let unread = 0, activeTab = 'play';
 const myName = () => NAMES[role];
 const theirName = () => NAMES[role === 'y' ? 'm' : 'y'];
 const pending = () => current && current.answer == null;
+let mode = 'ask';
+let vote = null;                                   // { id, text, ts, votes: { y, m } }
+let vused = new Set(store.get('vused', []));
+let vhist = store.get('vhist', []);
+const vpending = () => vote && !(vote.votes.y && vote.votes.m);
 
 /* ================= الدخول ================= */
 $('role-y').onclick = () => chooseRole('y');
@@ -402,7 +434,7 @@ function attach(c) {
     if (conn !== c) return;
     setStatus(true);
     send({ t: 'hi', role });
-    send({ t: 'sync', cur: current, used: [...used] });
+    send({ t: 'sync', cur: current, used: [...used], vote });
   };
   if (c.open) onOpen(); else c.on('open', onOpen);
   c.on('data', onData);
@@ -441,8 +473,23 @@ function onData(m) {
         current = c; saveHist();
       }
       renderStage(); renderQs();
+      const v = cleanVote(m.vote);
+      if (v) { mergeVote(v); }
       break;
     }
+    case 'vq': {
+      const v = cleanVote({ id: m.id, text: m.text, ts: m.ts, votes: { y: null, m: null } });
+      if (v) { vote = v; vused.add(v.id); store.set('vused', [...vused]); renderVote(); notify('سؤال مين فينا'); }
+      break;
+    }
+    case 'vv':
+      if (vote && vote.id === m.qid && (m.who === 'y' || m.who === 'm') && (m.choice === 'y' || m.choice === 'm') && !vote.votes[m.who]) {
+        vote.votes[m.who] = m.choice; saveVote(); renderVote(); notify('اختار');
+      }
+      break;
+    case 'vskip':
+      if (vote && vote.id === m.qid) { vote = null; renderVote(); }
+      break;
     case 'q': {
       const c = cleanCur({ id: m.id, cat: m.cat, text: m.text, from: m.from, ts: m.ts, answer: null });
       if (!c) break;
@@ -576,6 +623,104 @@ $('custom-form').onsubmit = e => {
   const t = $('custom-q').value.trim(); if (!t || pending()) return;
   $('custom-q').value = '';
   pick({ id: 'c' + Date.now(), cat: 'custom', text: t });
+};
+
+/* ================= مين فينا؟ ================= */
+const cleanVote = v => (v && typeof v === 'object' && v.id) ? {
+  id: String(v.id).slice(0, 40), text: String(v.text).slice(0, 200), ts: Number(v.ts) || 0,
+  votes: { y: v.votes && (v.votes.y === 'y' || v.votes.y === 'm') ? v.votes.y : null, m: v.votes && (v.votes.m === 'y' || v.votes.m === 'm') ? v.votes.m : null }
+} : null;
+function mergeVote(v) {
+  if (!vote || v.ts > vote.ts) vote = v;
+  else if (v.id === vote.id) { ['y', 'm'].forEach(k => { if (!vote.votes[k] && v.votes[k]) vote.votes[k] = v.votes[k]; }); }
+  else return;
+  saveVote(); renderVote();
+}
+function saveVote() {
+  if (vote && vote.votes.y && vote.votes.m && !vhist.some(h => h.id === vote.id)) {
+    vhist.unshift({ id: vote.id, text: vote.text, y: vote.votes.y, m: vote.votes.m, ts: Date.now() });
+    vhist = vhist.slice(0, 300); store.set('vhist', vhist);
+  }
+}
+function setMode(m) {
+  mode = m;
+  $('mode-ask').hidden = m !== 'ask'; $('mode-vote').hidden = m !== 'vote';
+  $('mode-q').setAttribute('aria-pressed', m === 'ask'); $('mode-v').setAttribute('aria-pressed', m === 'vote');
+  if (m === 'vote') renderVote();
+}
+$('mode-q').onclick = () => setMode('ask');
+$('mode-v').onclick = () => setMode('vote');
+const pickedWord = who => who === 'm' ? 'اختارت' : 'اختار';
+
+function renderVote() {
+  const s = $('vstage'); if (!s) return;
+  s.replaceChildren();
+  const lock = vpending();
+  $('v-random').disabled = lock;
+  const note = $('vnote'); note.hidden = !lock;
+  if (lock) note.textContent = 'كملوا السؤال الحالي الأول، أو اتخطوه.';
+
+  if (!vote) {
+    s.append(el('div', 'empty', 'دوس على سؤال من تحت. السؤال بيظهر عند الاتنين، وكل واحد يختار بإيده يوسف ولا مريم، والنتيجة بتظهر لما الاتنين يختاروا.'));
+  } else {
+    s.append(el('div', 'cat', 'مين فينا؟'));
+    s.append(el('div', 'q', vote.text));
+    const mine = vote.votes[role], theirs = vote.votes[role === 'y' ? 'm' : 'y'];
+    if (vote.votes.y && vote.votes.m) {
+      const r = el('div', 'reveal');
+      ['y', 'm'].forEach(k => {
+        const a = el('div', 'ans');
+        a.append(el('div', 'who', NAMES[k] + (k === role ? ' (إنت)' : '') + ' ' + pickedWord(k)), el('div', 'txt', NAMES[vote.votes[k]]));
+        r.append(a);
+      });
+      s.append(r);
+      s.append(el('div', 'vres', vote.votes.y === vote.votes.m ? 'اتفقتوا: الاتنين قالوا ' + NAMES[vote.votes.y] : 'اختلفتوا! كل واحد له رأي'));
+    } else if (!mine) {
+      s.append(el('div', 'status-line', 'دوس على اختيارك:'));
+      const b = el('div', 'vote-btns');
+      ['y', 'm'].forEach(k => {
+        const x = el('button', 'btn', NAMES[k]);
+        x.onclick = () => { vote.votes[role] = k; send({ t: 'vv', qid: vote.id, who: role, choice: k }); saveVote(); renderVote(); };
+        b.append(x);
+      });
+      s.append(b);
+    } else {
+      s.append(el('div', 'status-line', 'اخترت ' + NAMES[mine] + '. مستني ' + theirName() + '…'));
+    }
+    if (lock) {
+      const sk = el('button', 'btn ghost small', 'اتخطى السؤال');
+      sk.onclick = () => { send({ t: 'vskip', qid: vote.id }); vote = null; renderVote(); };
+      s.append(sk);
+    }
+  }
+
+  const l = $('vlist'); l.replaceChildren();
+  VQS.forEach(q => {
+    const b = el('button', 'qitem' + (vused.has(q.id) ? ' done' : '')); b.disabled = !!lock;
+    b.append(el('span', null, q.text));
+    if (vused.has(q.id)) b.append(el('span', 'tick', '✓'));
+    b.onclick = () => vpick(q);
+    l.append(b);
+  });
+
+  const n = vhist.length;
+  if (n) {
+    const agreed = vhist.filter(h => h.y === h.m).length;
+    let ys = 0, ms = 0; vhist.forEach(h => { if (h.y === 'y') ys++; else ms++; if (h.m === 'y') ys++; else ms++; });
+    $('vstats').textContent = 'اتسألتوا ' + n + ' سؤال · اتفقتوا في ' + agreed + ' · يوسف اتختار ' + ys + ' مرة · مريم اتختارت ' + ms + ' مرة';
+  } else $('vstats').textContent = '';
+}
+function vpick(q) {
+  if (vpending()) return;
+  vote = { id: q.id, text: q.text, ts: Date.now(), votes: { y: null, m: null } };
+  vused.add(q.id); store.set('vused', [...vused]);
+  send({ t: 'vq', id: q.id, text: q.text, ts: vote.ts });
+  renderVote(); $('vstage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+$('v-random').onclick = () => {
+  let pool = VQS.filter(q => !vused.has(q.id));
+  if (!pool.length) { vused.clear(); store.set('vused', []); pool = VQS; }
+  vpick(pool[Math.floor(Math.random() * pool.length)]);
 };
 
 /* السجل */
