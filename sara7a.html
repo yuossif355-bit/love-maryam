@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>صراحة مريم</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  /* Layout: lobby card -> room with two panels (play | chat); tabs on phones, side by side on desktop */
+  :root {
+    --bg0: #0d0213;
+    --bg1: #1b0720;
+    --glass: rgba(22, 9, 31, .6);
+    --line: rgba(255, 215, 0, .22);
+    --gold: #f0cf6a;
+    --rose: #ff4081;
+    --rose-deep: #c2185b;
+    --fg: #fbf3ff;
+    --muted: #b9a6c7;
+    --ok: #62d49a;
+    --mine: #3a1646;
+    --theirs: #2a0f36;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: 'Cairo', sans-serif;
+    background: radial-gradient(circle at 50% 0%, var(--bg1) 0%, var(--bg0) 55%, #050008 100%) fixed;
+    color: var(--fg);
+    padding: 16px max(16px, env(safe-area-inset-left)) 24px max(16px, env(safe-area-inset-right));
+    touch-action: manipulation;
+    overflow-x: hidden;
+  }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 20px 50px rgba(0,0,0,.5), 0 0 30px rgba(227,27,109,.12);
+  }
+  h1, h2, h3 { margin: 0; }
+  .amiri { font-family: 'Amiri', serif; }
+
+  /* ---------- lobby ---------- */
+  #lobby { max-width: 460px; margin: 6vh auto 0; padding: 28px 22px; text-align: center; display: grid; gap: 18px; }
+  #lobby h1 { font-size: 2.1rem; font-weight: 900; color: var(--gold); text-shadow: 0 0 18px rgba(255,64,129,.5); }
+  #lobby p { margin: 0; color: var(--muted); line-height: 1.8; }
+  .field { display: grid; gap: 6px; text-align: right; }
+  .field label { font-size: .85rem; color: var(--muted); }
+  .inp {
+    width: 100%; padding: 12px 14px; border-radius: 12px;
+    background: rgba(255,255,255,.07); border: 1px solid var(--line);
+    font-size: 1rem;
+  }
+  .inp::placeholder { color: #8d7a9b; }
+  .code-inp { text-align: center; letter-spacing: .35em; text-transform: uppercase; font-weight: 700; direction: ltr; }
+  .btn {
+    padding: 12px 18px; border-radius: 12px; border: 1px solid transparent;
+    background: linear-gradient(135deg, var(--rose), var(--rose-deep));
+    font-weight: 700; box-shadow: 0 8px 20px rgba(194,24,91,.35);
+    transition: transform .15s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.ghost { background: rgba(255,255,255,.07); border-color: var(--line); box-shadow: none; }
+  .btn.small { padding: 8px 12px; font-size: .85rem; border-radius: 10px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .or { color: var(--muted); font-size: .85rem; display: flex; align-items: center; gap: 10px; }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .err { color: #ff8aa8; min-height: 1.4em; font-size: .9rem; }
+
+  /* ---------- room ---------- */
+  .topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; margin-bottom: 14px; }
+  .topbar .title { font-weight: 900; color: var(--gold); font-size: 1.15rem; }
+  .topbar .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid var(--line); font-size: .85rem; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .code { direction: ltr; letter-spacing: .2em; font-weight: 900; color: var(--gold); }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab { flex: 1; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.05); font-weight: 700; position: relative; }
+  .tab[aria-selected="true"] { background: linear-gradient(135deg, var(--rose), var(--rose-deep)); border-color: transparent; }
+  .badge { position: absolute; top: -6px; left: 10px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--gold); color: #2a0f36; font-size: .72rem; font-weight: 900; display: grid; place-items: center; }
+
+  .layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+  @media (min-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+    .tabs { display: none; }
+    #panel-play, #panel-chat { display: block !important; }
+    #panel-chat { position: sticky; top: 16px; }
+  }
+
+  .panel { padding: 16px; display: grid; gap: 16px; }
+
+  /* current question */
+  .stage { padding: 18px; border-radius: 16px; background: linear-gradient(160deg, rgba(255,64,129,.14), rgba(255,215,0,.05)); border: 1px solid var(--line); display: grid; gap: 14px; }
+  .stage .cat { font-size: .8rem; color: var(--gold); letter-spacing: .04em; }
+  .stage .q { font-family: 'Amiri', serif; font-size: 1.6rem; line-height: 1.8; font-weight: 700; text-wrap: balance; }
+  .stage .empty { color: var(--muted); line-height: 1.9; }
+  .ans-box { display: grid; gap: 8px; }
+  textarea.inp { min-height: 90px; resize: vertical; line-height: 1.7; }
+  .status-line { font-size: .88rem; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .reveal { display: grid; gap: 10px; }
+  @media (min-width: 560px) { .reveal { grid-template-columns: 1fr 1fr; } }
+  .ans { padding: 14px; border-radius: 14px; background: rgba(0,0,0,.25); border: 1px solid var(--line); display: grid; gap: 6px; animation: pop .35s ease both; }
+  .ans .who { font-size: .8rem; color: var(--gold); font-weight: 700; }
+  .ans .txt { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+  /* question picker */
+  .section-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .section-h h3 { font-size: 1.05rem; color: var(--gold); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .chip { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.05); font-size: .9rem; white-space: nowrap; }
+  .chip[aria-pressed="true"] { background: var(--gold); color: #2a0f36; font-weight: 700; border-color: transparent; }
+  .qlist { display: grid; gap: 8px; max-height: 420px; overflow-y: auto; padding-inline-end: 4px; }
+  .qitem {
+    text-align: right; padding: 12px 14px; border-radius: 12px; line-height: 1.7;
+    background: rgba(255,255,255,.05); border: 1px solid var(--line);
+    display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+    transition: background .15s, transform .15s;
+  }
+  .qitem:hover { background: rgba(255,64,129,.14); }
+  .qitem:active { transform: scale(.985); }
+  .qitem.done { opacity: .5; }
+  .qitem .tick { color: var(--ok); font-weight: 900; flex: none; }
+  .custom { display: flex; gap: 8px; }
+  .custom .inp { flex: 1; min-width: 0; }
+
+  details.hist summary { cursor: pointer; color: var(--gold); font-weight: 700; }
+  .hist-list { display: grid; gap: 10px; margin-top: 10px; }
+  .hist-item { padding: 12px; border-radius: 12px; background: rgba(0,0,0,.22); border: 1px solid var(--line); display: grid; gap: 6px; }
+  .hist-item .hq { font-family: 'Amiri', serif; font-size: 1.1rem; }
+  .hist-item .ha { font-size: .9rem; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .hist-item .ha b { color: var(--fg); }
+
+  /* chat */
+  .chat { display: grid; grid-template-rows: auto 1fr auto; gap: 10px; height: min(70vh, 560px); padding: 14px; }
+  .msgs { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+  .msg { max-width: 82%; padding: 8px 12px; border-radius: 14px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .msg.me { align-self: flex-start; background: var(--mine); border: 1px solid var(--line); border-end-start-radius: 4px; }
+  .msg.them { align-self: flex-end; background: var(--theirs); border: 1px solid rgba(255,255,255,.1); border-end-end-radius: 4px; }
+  .msg small { display: block; font-size: .7rem; color: var(--muted); margin-bottom: 2px; }
+  .msg.sys { align-self: center; background: none; color: var(--muted); font-size: .8rem; padding: 2px; }
+  .chat form { display: flex; gap: 8px; }
+  .chat form .inp { flex: 1; min-width: 0; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ====== Lobby ====== -->
+  <section id="lobby" class="glass">
+    <h1>صراحة مريم</h1>
+    <p>أسئلة صراحة كتير، إنتوا الاتنين تجاوبوا من موبايلاتكم، والإجابات بتظهر لما الاتنين يخلصوا. وفيه شات جنبها.</p>
+    <div class="field">
+      <label for="name">اسمك</label>
+      <input id="name" class="inp" maxlength="20" placeholder="اكتب اسمك" autocomplete="off">
+    </div>
+    <button id="btn-create" class="btn">اعمل غرفة جديدة</button>
+    <div class="or">أو ادخل غرفة</div>
+    <div class="field">
+      <label for="code-in">كود الغرفة</label>
+      <input id="code-in" class="inp code-inp" maxlength="5" placeholder="XXXXX" autocomplete="off">
+    </div>
+    <button id="btn-join" class="btn ghost">ادخل</button>
+    <div id="lobby-err" class="err" role="status"></div>
+  </section>
+
+  <!-- ====== Room ====== -->
+  <section id="room" hidden>
+    <div class="topbar glass">
+      <div class="title">صراحة مريم</div>
+      <div class="meta">
+        <span class="pill"><span id="dot" class="dot"></span><span id="status">مستني الطرف التاني</span></span>
+        <span class="pill">كود: <span id="room-code" class="code"></span></span>
+        <button id="btn-copy" class="btn ghost small">انسخ اللينك</button>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-play" aria-selected="true" data-tab="play">الأسئلة</button>
+      <button class="tab" role="tab" id="tab-chat" aria-selected="false" data-tab="chat">الشات<span id="badge" class="badge" hidden>0</span></button>
+    </div>
+
+    <div class="layout">
+      <div id="panel-play" class="glass panel">
+        <div id="stage" class="stage"></div>
+
+        <div>
+          <div class="section-h">
+            <h3>دوس على أي سؤال</h3>
+            <button id="btn-random" class="btn ghost small">سؤال عشوائي</button>
+          </div>
+        </div>
+        <div id="chips" class="chips" role="group" aria-label="أقسام الأسئلة"></div>
+        <div id="qlist" class="qlist"></div>
+
+        <form id="custom-form" class="custom">
+          <input id="custom-q" class="inp" maxlength="200" placeholder="أو اكتب سؤالك إنت" autocomplete="off">
+          <button class="btn small" type="submit">ابعت</button>
+        </form>
+
+        <details class="hist">
+          <summary>اللي جاوبناه قبل كده (<span id="hist-n">0</span>)</summary>
+          <div id="hist" class="hist-list"></div>
+        </details>
+      </div>
+
+      <div id="panel-chat" class="glass chat" hidden>
+        <div class="section-h"><h3>الشات</h3></div>
+        <div id="msgs" class="msgs" aria-live="polite"></div>
+        <form id="chat-form">
+          <input id="chat-in" class="inp" maxlength="500" placeholder="اكتب رسالة" autocomplete="off">
+          <button class="btn small" type="submit">ابعت</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ================= الأسئلة ================= */
+const CATS = [
+  { id: 'love', name: 'حب', qs: [
+    'أول مرة حسيت إنك بتحبني كانت إمتى؟ وإيه اللي حصل؟',
+    'إيه أكتر حاجة فيا بتخليك متعلق بيا؟',
+    'إيه أكتر كلمة بتحب تسمعها مني؟',
+    'بتغير عليا؟ وإمتى بتحس بالغيرة أكتر؟',
+    'لو هتوصف حبك ليا في جملة واحدة، هتقول إيه؟',
+    'إمتى آخر مرة اشتقتلي أوي؟',
+    'إيه أكتر حاجة بتخليك تحس إني بحبك؟',
+    'بتفضل الكلام الحلو ولا الأفعال؟ وليه؟',
+    'إيه أكتر لحظة حبيتني فيها أكتر من أي وقت؟',
+    'لو هتغير حاجة واحدة في علاقتنا، هتكون إيه؟',
+    'إيه أول انطباع خدته عني أول ما شوفتني؟',
+    'بتتخيل شكل حياتنا بعد عشر سنين إزاي؟',
+    'إيه أحلى حاجة عملتها عشانك وفضلت فاكرها؟',
+    'إيه الحاجة الصغيرة اللي بعملها وبتحبها وبتسكت عنها؟'
+  ]},
+  { id: 'deep', name: 'صراحة تقيلة', qs: [
+    'إيه أكتر حاجة فيك بتخاف تقولها لحد؟',
+    'في سر كبير فاكر إنك مش هتقدر تحكيه؟',
+    'إيه أكتر حاجة ندمان عليها في حياتك؟',
+    'إمتى آخر مرة كدبت عليا؟ وكدبت في إيه؟',
+    'في حاجة فيا مضايقاك ومش بتقولها؟',
+    'إيه أكتر حاجة بتخوفك في علاقتنا؟',
+    'إيه أكتر حاجة بتحس إنك مش كفاية فيها؟',
+    'في حد من ماضيك لسه بتفتكره؟ وليه؟',
+    'إيه أكتر تصرف مني زعلك وسكت؟',
+    'إيه أكتر حاجة بتخبيها عن الناس؟',
+    'لو هتعترف بحاجة واحدة دلوقتي، هتكون إيه؟',
+    'بتثق فيا لأي درجة من عشرة؟ وليه؟',
+    'إيه الحاجة اللي لو حصلت هتخليك تبعد؟',
+    'إيه أكتر حاجة بتخبيها عني لحد دلوقتي؟'
+  ]},
+  { id: 'memo', name: 'ذكريات', qs: [
+    'إيه أحلى يوم قضيناه سوا؟',
+    'إيه أكتر موقف ضحكنا فيه؟',
+    'أول حاجة فكرت فيها لما اتعرفنا؟',
+    'إيه أكتر مكان نفسك نروحه سوا؟',
+    'فاكر أول خناقة بينا؟ كانت على إيه؟',
+    'إيه أغنية بتفكرك بينا؟',
+    'إيه أحلى هدية خدتها في حياتك؟',
+    'إيه أكتر ذكرى من طفولتك بتحب ترجعلها؟',
+    'إيه أكتر موقف محرج حصلك قدامي؟',
+    'إيه أحسن أكلة أكلناها سوا؟',
+    'لو هنعيد يوم واحد من اللي فات، هنعيد أنهي يوم؟'
+  ]},
+  { id: 'future', name: 'أحلام ومستقبل', qs: [
+    'بتحلم تبقى فين بعد خمس سنين؟',
+    'إيه شكل البيت اللي نفسك فيه؟',
+    'نفسك في كام طفل؟ وهتسميهم إيه؟',
+    'إيه الشغل اللي كان نفسك فيه من صغرك؟',
+    'لو معاك فلوس كتير بكرة، أول حاجة هتعملها إيه؟',
+    'إيه أول بلد نفسك نسافرها سوا؟',
+    'إيه أكتر حاجة بتخاف منها في المستقبل؟',
+    'إيه الحاجة اللي نفسك تتعلمها؟',
+    'شايف علاقتنا هتوصل لفين؟',
+    'إيه الحاجة اللي عايز تحققها قبل آخر السنة؟'
+  ]},
+  { id: 'feel', name: 'مشاعر ومواقف', qs: [
+    'إيه اللي بيعصبك بسرعة؟',
+    'لما تزعل، بتحب أسيبك لوحدك ولا أقعد جنبك؟',
+    'إيه أكتر حاجة بتخليك تعيط؟',
+    'آخر مرة عيطت كانت إمتى وليه؟',
+    'إيه الحاجة اللي بتطمنك لما تبقى قلقان؟',
+    'بتتضايق لما أتأخر في الرد؟',
+    'إيه أكتر وقت حسيت فيه بالوحدة؟',
+    'إيه أكتر حاجة بتفرحك بسهولة؟',
+    'إيه أكتر حاجة بتتمنى حد يفهمها فيك؟'
+  ]},
+  { id: 'us', name: 'أنا وإنت', qs: [
+    'إيه أكتر حاجة بتحبها في شكلي؟',
+    'إيه عادة عندي بتضحكك؟',
+    'إيه عادة عندي بتضايقك؟',
+    'لو هتوصفني لواحد ميعرفنيش، هتقول إيه؟',
+    'إيه أحلى حاجة في ضحكتي؟',
+    'مين فينا بيحب أكتر؟ وليه؟',
+    'مين فينا بيعتذر الأول؟',
+    'إيه أكتر حاجة فيا بتحسدني عليها؟',
+    'لو هغير حاجة واحدة في نفسي عشانك، تحب تكون إيه؟'
+  ]},
+  { id: 'bold', name: 'جرأة خفيفة', qs: [
+    'لو هتعمل حاجة مجنونة معايا دلوقتي، هتكون إيه؟',
+    'إيه أكتر حاجة بتتكسف تطلبها مني؟',
+    'قول حاجة عمرك ما قلتهالي.',
+    'إيه أغرب حاجة بتخطر على بالك عني؟',
+    'إيه أكتر لبس بتحبه عليا؟',
+    'إيه أحلى حاجة بتحب نعملها لما نتقابل؟',
+    'اكتب رسالة حب في تلات سطور دلوقتي، من غير تفكير.',
+    'اكتب تلات حاجات بتحبها فيا من غير ما تفكر.'
+  ]},
+  { id: 'fun', name: 'هزار وخفة', qs: [
+    'لو هتاكل أكلة واحدة طول عمرك، هتبقى إيه؟',
+    'لو هتبقى حيوان، هتبقى إيه؟ وليه؟',
+    'إيه أغبى حاجة عملتها في حياتك؟',
+    'إيه أكتر كذبة بتقولها كتير؟',
+    'لو هتتحبس في جزيرة مع حد واحد غيري، مين؟',
+    'إيه أغرب عادة عندك؟',
+    'إيه الحاجة اللي بتأجلها لآخر لحظة دايمًا؟',
+    'إيه أول حاجة بتعملها لما تصحى؟',
+    'إيه أسوأ موقف محرج حصلك في حياتك؟',
+    'لو معاك قوة خارقة ليوم واحد، هتعمل بيها إيه؟'
+  ]}
+];
+// id ثابت لكل سؤال (قسم + رقم) عشان نعرف اللي اتسأل
+const QMAP = {};
+CATS.forEach(c => c.qs.forEach((text, i) => { QMAP[c.id + i] = { id: c.id + i, cat: c.id, text }; }));
+const catName = id => (CATS.find(c => c.id === id) || { name: 'سؤال مخصص' }).name;
+
+/* ================= مساعدات ================= */
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('sara7a:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('sara7a:' + k, JSON.stringify(v)); } catch (e) {} }
+};
+const PID = c => 'sara7a-maryam-' + c.toLowerCase();
+
+/* ================= الحالة ================= */
+let peer = null, conn = null, isHost = false, code = '', myName = '', theirName = '';
+let current = null;          // { id, cat, text, mine, theirs }
+let used = new Set(store.get('used', []));
+let history = store.get('history', []);
+let activeCat = CATS[0].id;
+let unread = 0, activeTab = 'play';
+
+/* ================= اللوبي ================= */
+$('name').value = store.get('name', '');
+$('code-in').value = (new URLSearchParams(location.search).get('room') || store.get('lastCode', '') || '').toUpperCase().slice(0, 5);
+
+function lobbyErr(msg) { $('lobby-err').textContent = msg || ''; }
+function needName() {
+  myName = $('name').value.trim();
+  if (!myName) { lobbyErr('اكتب اسمك الأول.'); $('name').focus(); return false; }
+  store.set('name', myName); lobbyErr(''); return true;
+}
+function genCode() {
+  const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = '';
+  for (let i = 0; i < 5; i++) s += a[Math.floor(Math.random() * a.length)];
+  return s;
+}
+$('btn-create').onclick = () => { if (needName()) createRoom(); };
+$('btn-join').onclick = () => {
+  if (!needName()) return;
+  const c = $('code-in').value.trim().toUpperCase();
+  if (c.length < 5) { lobbyErr('اكتب كود الغرفة (5 حروف).'); return; }
+  joinRoom(c);
+};
+$('code-in').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-join').click(); });
+$('name').addEventListener('keydown', e => { if (e.key === 'Enter') ($('code-in').value.length >= 5 ? $('btn-join') : $('btn-create')).click(); });
+
+/* ================= الاتصال (PeerJS: من موبايل لموبايل) ================= */
+function createRoom(prefCode) {
+  if (typeof Peer === 'undefined') { lobbyErr('مش قادر أحمّل مكتبة الاتصال. اتأكد من النت وحاول تاني.'); return; }
+  isHost = true; code = prefCode || genCode();
+  peer = new Peer(PID(code));
+  peer.on('open', () => { store.set('lastCode', code); enterRoom(); setStatus(false); });
+  peer.on('connection', c => attach(c));
+  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id') { try { peer.destroy(); } catch (x) {} createRoom(); }
+    else lobbyErr('حصلت مشكلة في الاتصال، جرب تاني.');
+  });
+}
+function joinRoom(c) {
+  if (typeof Peer === 'undefined') { lobbyErr('مش قادر أحمّل مكتبة الاتصال. اتأكد من النت وحاول تاني.'); return; }
+  isHost = false; code = c;
+  peer = new Peer();
+  peer.on('open', () => { store.set('lastCode', code); enterRoom(); setStatus(false); connectToHost(); });
+  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+  peer.on('error', e => {
+    if (e.type === 'peer-unavailable') {
+      setStatus(false, 'الغرفة لسه مفتوحة عند الطرف التاني؟ بحاول تاني…');
+      setTimeout(connectToHost, 3000);
+    }
+  });
+}
+function connectToHost() {
+  if (!peer || peer.destroyed || (conn && conn.open)) return;
+  attach(peer.connect(PID(code), { reliable: true }));
+}
+function attach(c) {
+  if (conn && conn !== c) { try { conn.close(); } catch (e) {} }
+  conn = c;
+  const onOpen = () => {
+    setStatus(true);
+    send({ t: 'hi', name: myName });
+    send({ t: 'sync', q: current ? { id: current.id, cat: current.cat, text: current.text } : null, a: current ? current.mine : null, used: [...used] });
+  };
+  if (c.open) onOpen(); else c.on('open', onOpen);
+  c.on('data', onData);
+  c.on('close', () => {
+    if (conn !== c) return;
+    setStatus(false, 'الطرف التاني خرج');
+    addMsg({ sys: true, text: (theirName || 'الطرف التاني') + ' خرج من الغرفة' });
+    if (!isHost) setTimeout(connectToHost, 2500);
+  });
+  c.on('error', () => {});
+}
+function send(obj) { try { if (conn && conn.open) conn.send(obj); } catch (e) {} }
+
+function setStatus(on, text) {
+  $('dot').classList.toggle('on', !!on);
+  $('status').textContent = on ? ((theirName || 'الطرف التاني') + ' متصل') : (text || 'مستني الطرف التاني');
+  renderStage();
+}
+
+/* ================= استقبال الرسايل ================= */
+function onData(m) {
+  if (!m || typeof m !== 'object') return;
+  switch (m.t) {
+    case 'hi':
+      theirName = String(m.name || 'الطرف التاني').slice(0, 20);
+      setStatus(true);
+      addMsg({ sys: true, text: theirName + ' دخل الغرفة' });
+      break;
+    case 'sync':
+      (m.used || []).forEach(x => used.add(x)); store.set('used', [...used]);
+      if (m.q && (QMAP[m.q.id] || m.q.cat === 'custom')) {
+        if (!current || current.id !== m.q.id) current = { id: m.q.id, cat: m.q.cat, text: String(m.q.text).slice(0, 200), mine: null, theirs: m.a == null ? null : String(m.a) };
+        else if (m.a != null) current.theirs = String(m.a);
+        checkReveal();
+      }
+      renderStage(); renderQs();
+      break;
+    case 'q':
+      current = { id: m.id, cat: m.cat, text: String(m.text).slice(0, 200), mine: null, theirs: null };
+      used.add(m.id); store.set('used', [...used]);
+      renderStage(); renderQs(); notify('سؤال جديد');
+      break;
+    case 'a':
+      if (current && current.id === m.qid) { current.theirs = String(m.text).slice(0, 1000); checkReveal(); renderStage(); notify('جاوب'); }
+      break;
+    case 'chat':
+      addMsg({ from: theirName || 'الطرف التاني', text: String(m.text).slice(0, 500) });
+      if (activeTab !== 'chat' || window.innerWidth < 900) { unread++; updateBadge(); }
+      notify('رسالة جديدة');
+      break;
+  }
+}
+function notify(label) {
+  try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {}
+  if (document.hidden) { document.title = '• ' + label + ' | صراحة مريم'; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = 'صراحة مريم'; });
+
+/* ================= واجهة الغرفة ================= */
+function enterRoom() {
+  $('lobby').hidden = true; $('room').hidden = false;
+  $('room-code').textContent = code;
+  renderChips(); renderQs(); renderStage(); renderHist(); applyTab();
+  addMsg({ sys: true, text: isHost ? 'ابعت الكود أو اللينك للطرف التاني.' : 'دخلت الغرفة ' + code });
+}
+$('btn-copy').onclick = async () => {
+  const url = location.origin + location.pathname + '?room=' + code;
+  try { await navigator.clipboard.writeText(url); $('btn-copy').textContent = 'اتنسخ'; }
+  catch (e) { $('btn-copy').textContent = code; }
+  setTimeout(() => $('btn-copy').textContent = 'انسخ اللينك', 1800);
+};
+
+/* tabs (موبايل) */
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { activeTab = b.dataset.tab; if (activeTab === 'chat') { unread = 0; updateBadge(); } applyTab(); });
+function applyTab() {
+  $('tab-play').setAttribute('aria-selected', activeTab === 'play');
+  $('tab-chat').setAttribute('aria-selected', activeTab === 'chat');
+  $('panel-play').hidden = activeTab !== 'play';
+  $('panel-chat').hidden = activeTab !== 'chat';
+  if (activeTab === 'chat') scrollMsgs();
+}
+function updateBadge() { $('badge').hidden = unread === 0; $('badge').textContent = unread; }
+window.addEventListener('resize', () => { if (window.innerWidth >= 900) { unread = 0; updateBadge(); } });
+
+/* السؤال الحالي */
+function renderStage() {
+  const s = $('stage'); if (!s) return;
+  s.replaceChildren();
+  if (!current) {
+    s.append(el('div', 'empty', 'لسه مفيش سؤال. دوس على أي سؤال من تحت، أو اختار "سؤال عشوائي". السؤال بيظهر عند الاتنين.'));
+    return;
+  }
+  s.append(el('div', 'cat', catName(current.cat)));
+  s.append(el('div', 'q', current.text));
+  const them = theirName || 'الطرف التاني';
+
+  if (current.mine != null && current.theirs != null) {
+    const r = el('div', 'reveal');
+    const a1 = el('div', 'ans'); a1.append(el('div', 'who', myName + ' (إنت)'), el('div', 'txt', current.mine));
+    const a2 = el('div', 'ans'); a2.append(el('div', 'who', them), el('div', 'txt', current.theirs));
+    r.append(a1, a2); s.append(r);
+    const b = el('button', 'btn ghost small', 'اختار سؤال تاني من تحت');
+    b.onclick = () => { $('qlist').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    s.append(b);
+    return;
+  }
+  if (current.mine == null) {
+    const box = el('div', 'ans-box');
+    const ta = el('textarea', 'inp'); ta.id = 'my-ans'; ta.placeholder = 'اكتب إجابتك بصراحة…'; ta.maxLength = 1000;
+    ta.setAttribute('aria-label', 'إجابتك');
+    const btn = el('button', 'btn', 'ابعت إجابتي');
+    btn.onclick = () => {
+      const t = ta.value.trim(); if (!t) { ta.focus(); return; }
+      current.mine = t; send({ t: 'a', qid: current.id, text: t });
+      checkReveal(); renderStage();
+    };
+    box.append(ta, btn); s.append(box);
+  } else {
+    s.append(el('div', 'status-line', 'إجابتك اتبعتت. مستني ' + them + '…'));
+  }
+  if (current.mine == null) {
+    s.append(el('div', 'status-line', current.theirs != null ? them + ' جاوب، ومستنيك.' : them + ' لسه بيفكر. الإجابات بتظهر لما الاتنين يجاوبوا.'));
+  }
+}
+function checkReveal() {
+  if (current && current.mine != null && current.theirs != null && !current._saved) {
+    current._saved = true;
+    history.unshift({ q: current.text, cat: current.cat, me: myName, mine: current.mine, them: theirName || 'الطرف التاني', theirs: current.theirs, ts: Date.now() });
+    history = history.slice(0, 200); store.set('history', history); renderHist();
+  }
+}
+
+/* قايمة الأسئلة */
+function renderChips() {
+  const c = $('chips'); c.replaceChildren();
+  CATS.forEach(cat => {
+    const b = el('button', 'chip', cat.name); b.setAttribute('aria-pressed', cat.id === activeCat);
+    b.onclick = () => { activeCat = cat.id; renderChips(); renderQs(); };
+    c.append(b);
+  });
+}
+function renderQs() {
+  const l = $('qlist'); if (!l) return; l.replaceChildren();
+  const cat = CATS.find(c => c.id === activeCat);
+  cat.qs.forEach((text, i) => {
+    const q = QMAP[cat.id + i];
+    const b = el('button', 'qitem' + (used.has(q.id) ? ' done' : ''));
+    b.append(el('span', null, text));
+    if (used.has(q.id)) b.append(el('span', 'tick', '✓'));
+    b.onclick = () => pick(q);
+    l.append(b);
+  });
+}
+function pick(q) {
+  current = { id: q.id, cat: q.cat, text: q.text, mine: null, theirs: null };
+  used.add(q.id); store.set('used', [...used]);
+  send({ t: 'q', id: q.id, cat: q.cat, text: q.text });
+  renderStage(); renderQs();
+  $('stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+$('btn-random').onclick = () => {
+  let pool = Object.values(QMAP).filter(q => !used.has(q.id));
+  if (!pool.length) { used.clear(); store.set('used', []); pool = Object.values(QMAP); renderQs(); }
+  pick(pool[Math.floor(Math.random() * pool.length)]);
+};
+$('custom-form').onsubmit = e => {
+  e.preventDefault();
+  const t = $('custom-q').value.trim(); if (!t) return;
+  const q = { id: 'c' + Date.now(), cat: 'custom', text: t };
+  $('custom-q').value = '';
+  current = { id: q.id, cat: q.cat, text: q.text, mine: null, theirs: null };
+  send({ t: 'q', id: q.id, cat: q.cat, text: q.text });
+  renderStage();
+};
+
+/* السجل */
+function renderHist() {
+  $('hist-n').textContent = history.length;
+  const h = $('hist'); h.replaceChildren();
+  if (!history.length) { h.append(el('div', 'status-line', 'لسه مفيش. أول ما تجاوبوا هتتسجل هنا على موبايلك.')); return; }
+  history.forEach(x => {
+    const d = el('div', 'hist-item');
+    d.append(el('div', 'hq', x.q));
+    const a = el('div', 'ha'); a.append(el('b', null, x.me + ': '), document.createTextNode(x.mine)); d.append(a);
+    const b = el('div', 'ha'); b.append(el('b', null, x.them + ': '), document.createTextNode(x.theirs)); d.append(b);
+    h.append(d);
+  });
+}
+
+/* الشات */
+function addMsg(m) {
+  const box = $('msgs'); if (!box) return;
+  const d = el('div', 'msg ' + (m.sys ? 'sys' : m.me ? 'me' : 'them'));
+  if (!m.sys) d.append(el('small', null, m.me ? 'إنت' : m.from));
+  d.append(document.createTextNode(m.text));
+  box.append(d); scrollMsgs();
+}
+function scrollMsgs() { const b = $('msgs'); if (b) b.scrollTop = b.scrollHeight; }
+$('chat-form').onsubmit = e => {
+  e.preventDefault();
+  const t = $('chat-in').value.trim(); if (!t) return;
+  $('chat-in').value = '';
+  if (!(conn && conn.open)) { addMsg({ sys: true, text: 'الطرف التاني مش متصل دلوقتي.' }); return; }
+  send({ t: 'chat', text: t }); addMsg({ me: true, text: t });
+};
+
+/* لو اللينك فيه ?room= والاسم محفوظ، ادخل على طول */
+if (new URLSearchParams(location.search).get('room') && store.get('name', '')) {
+  lobbyErr('دوس "ادخل" عشان تدخل الغرفة.');
+}
+</script>
+</body>
+</html>
