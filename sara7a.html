@@ -76,6 +76,10 @@
   .btn:disabled { opacity: .45; cursor: default; }
   .or { color: var(--muted); font-size: .85rem; display: flex; align-items: center; gap: 10px; }
   .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .role-btns { display: grid; gap: 12px; }
+  .role-btns .btn { padding: 18px; font-size: 1.2rem; }
+  .note { font-size: .88rem; color: var(--gold); }
+  .qitem:disabled, .btn:disabled { opacity: .4; cursor: default; }
   .err { color: #ff8aa8; min-height: 1.4em; font-size: .9rem; }
 
   /* ---------- room ---------- */
@@ -164,19 +168,11 @@
   <!-- ====== Lobby ====== -->
   <section id="lobby" class="glass">
     <h1>صراحة مريم</h1>
-    <p>أسئلة صراحة كتير، إنتوا الاتنين تجاوبوا من موبايلاتكم، والإجابات بتظهر لما الاتنين يخلصوا. وفيه شات جنبها.</p>
-    <div class="field">
-      <label for="name">اسمك</label>
-      <input id="name" class="inp" maxlength="20" placeholder="اكتب اسمك" autocomplete="off">
+    <p>كل واحد فيكم يختار للتاني سؤال، والتاني يجاوب بصراحة. من غير كود ولا تسجيل، افتحوا الصفحة بس.</p>
+    <div class="role-btns">
+      <button id="role-y" class="btn">أنا يوسف</button>
+      <button id="role-m" class="btn">أنا مريم</button>
     </div>
-    <button id="btn-create" class="btn">اعمل غرفة جديدة</button>
-    <div class="or">أو ادخل غرفة</div>
-    <div class="field">
-      <label for="code-in">كود الغرفة</label>
-      <input id="code-in" class="inp code-inp" maxlength="5" placeholder="XXXXX" autocomplete="off">
-    </div>
-    <button id="btn-join" class="btn ghost">ادخل</button>
-    <div id="lobby-err" class="err" role="status"></div>
   </section>
 
   <!-- ====== Room ====== -->
@@ -185,8 +181,7 @@
       <div class="title">صراحة مريم</div>
       <div class="meta">
         <span class="pill"><span id="dot" class="dot"></span><span id="status">مستني الطرف التاني</span></span>
-        <span class="pill">كود: <span id="room-code" class="code"></span></span>
-        <button id="btn-copy" class="btn ghost small">انسخ اللينك</button>
+        <button id="btn-switch" class="btn ghost small">مش أنا</button>
       </div>
     </div>
 
@@ -201,15 +196,16 @@
 
         <div>
           <div class="section-h">
-            <h3>دوس على أي سؤال</h3>
+            <h3 id="pick-h">دوس على سؤال تسأله</h3>
             <button id="btn-random" class="btn ghost small">سؤال عشوائي</button>
           </div>
         </div>
         <div id="chips" class="chips" role="group" aria-label="أقسام الأسئلة"></div>
         <div id="qlist" class="qlist"></div>
 
+        <div id="pick-note" class="note" hidden></div>
         <form id="custom-form" class="custom">
-          <input id="custom-q" class="inp" maxlength="200" placeholder="أو اكتب سؤالك إنت" autocomplete="off">
+          <input id="custom-q" class="inp" maxlength="200" placeholder="أو اكتب سؤالك بنفسك" autocomplete="off">
           <button class="btn small" type="submit">ابعت</button>
         </form>
 
@@ -348,151 +344,140 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('sara7a:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('sara7a:' + k, JSON.stringify(v)); } catch (e) {} }
 };
-const PID = c => 'sara7a-maryam-' + c.toLowerCase();
 
 /* ================= الحالة ================= */
-let peer = null, conn = null, isHost = false, code = '', myName = '', theirName = '';
-let current = null;          // { id, cat, text, mine, theirs }
+const ROOM = 'sara7a-maryam-youssef-k7x2q9';      // غرفة ثابتة: مفيش كود
+const NAMES = { y: 'يوسف', m: 'مريم' };
+let role = store.get('role', null);                // 'y' | 'm'
+let peer = null, conn = null, isHost = false, retryT = null;
+let current = null;                                // { id, cat, text, from, ts, answer }
 let used = new Set(store.get('used', []));
 let history = store.get('history', []);
 let activeCat = CATS[0].id;
 let unread = 0, activeTab = 'play';
+const myName = () => NAMES[role];
+const theirName = () => NAMES[role === 'y' ? 'm' : 'y'];
+const pending = () => current && current.answer == null;
 
-/* ================= اللوبي ================= */
-$('name').value = store.get('name', '');
-$('code-in').value = (new URLSearchParams(location.search).get('room') || store.get('lastCode', '') || '').toUpperCase().slice(0, 5);
+/* ================= الدخول ================= */
+$('role-y').onclick = () => chooseRole('y');
+$('role-m').onclick = () => chooseRole('m');
+function chooseRole(r) { role = r; store.set('role', r); enterRoom(); start(); }
+$('btn-switch').onclick = () => { store.set('role', null); location.reload(); };
 
-function lobbyErr(msg) { $('lobby-err').textContent = msg || ''; }
-function needName() {
-  myName = $('name').value.trim();
-  if (!myName) { lobbyErr('اكتب اسمك الأول.'); $('name').focus(); return false; }
-  store.set('name', myName); lobbyErr(''); return true;
+/* ================= الاتصال (من موبايل لموبايل، من غير كود) =================
+   أول واحد يفتح بيحجز الغرفة، والتاني بيتصل بيه. لو الأول قفل، التاني بيحجزها تلقائي. */
+function cleanup() {
+  const p = peer; peer = null; conn = null;
+  if (p) { try { p.destroy(); } catch (e) {} }
 }
-function genCode() {
-  const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = '';
-  for (let i = 0; i < 5; i++) s += a[Math.floor(Math.random() * a.length)];
-  return s;
-}
-$('btn-create').onclick = () => { if (needName()) createRoom(); };
-$('btn-join').onclick = () => {
-  if (!needName()) return;
-  const c = $('code-in').value.trim().toUpperCase();
-  if (c.length < 5) { lobbyErr('اكتب كود الغرفة (5 حروف).'); return; }
-  joinRoom(c);
-};
-$('code-in').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-join').click(); });
-$('name').addEventListener('keydown', e => { if (e.key === 'Enter') ($('code-in').value.length >= 5 ? $('btn-join') : $('btn-create')).click(); });
-
-/* ================= الاتصال (PeerJS: من موبايل لموبايل) ================= */
-function createRoom(prefCode) {
-  if (typeof Peer === 'undefined') { lobbyErr('مش قادر أحمّل مكتبة الاتصال. اتأكد من النت وحاول تاني.'); return; }
-  isHost = true; code = prefCode || genCode();
-  peer = new Peer(PID(code));
-  peer.on('open', () => { store.set('lastCode', code); enterRoom(); setStatus(false); });
-  peer.on('connection', c => attach(c));
-  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
-  peer.on('error', e => {
-    if (e.type === 'unavailable-id') { try { peer.destroy(); } catch (x) {} createRoom(); }
-    else lobbyErr('حصلت مشكلة في الاتصال، جرب تاني.');
+function retry(ms) { clearTimeout(retryT); retryT = setTimeout(start, ms); }
+function start() {
+  clearTimeout(retryT); cleanup();
+  if (typeof Peer === 'undefined') { setStatus(false, 'مش قادر أحمّل مكتبة الاتصال. اتأكد من النت.'); return; }
+  setStatus(false, 'بدور على ' + theirName() + '…');
+  const p = new Peer(ROOM); peer = p; isHost = true;
+  p.on('connection', c => { if (peer === p) attach(c); });
+  p.on('disconnected', () => { try { if (peer === p) p.reconnect(); } catch (e) {} });
+  p.on('error', e => {
+    if (peer !== p) return;
+    if (e.type === 'unavailable-id') { try { p.destroy(); } catch (x) {} joinAsGuest(); }
+    else retry(3000);
   });
 }
-function joinRoom(c) {
-  if (typeof Peer === 'undefined') { lobbyErr('مش قادر أحمّل مكتبة الاتصال. اتأكد من النت وحاول تاني.'); return; }
-  isHost = false; code = c;
-  peer = new Peer();
-  peer.on('open', () => { store.set('lastCode', code); enterRoom(); setStatus(false); connectToHost(); });
-  peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
-  peer.on('error', e => {
-    if (e.type === 'peer-unavailable') {
-      setStatus(false, 'الغرفة لسه مفتوحة عند الطرف التاني؟ بحاول تاني…');
-      setTimeout(connectToHost, 3000);
-    }
+function joinAsGuest() {
+  const p = new Peer(); peer = p; isHost = false;
+  p.on('open', () => { if (peer === p) attach(p.connect(ROOM, { reliable: true })); });
+  p.on('disconnected', () => { try { if (peer === p) p.reconnect(); } catch (e) {} });
+  p.on('error', e => {
+    if (peer !== p) return;
+    if (e.type === 'peer-unavailable') { try { p.destroy(); } catch (x) {} retry(1500); }   // الغرفة فاضية: جرب تحجزها
+    else retry(3000);
   });
-}
-function connectToHost() {
-  if (!peer || peer.destroyed || (conn && conn.open)) return;
-  attach(peer.connect(PID(code), { reliable: true }));
 }
 function attach(c) {
   if (conn && conn !== c) { try { conn.close(); } catch (e) {} }
   conn = c;
   const onOpen = () => {
+    if (conn !== c) return;
     setStatus(true);
-    send({ t: 'hi', name: myName });
-    send({ t: 'sync', q: current ? { id: current.id, cat: current.cat, text: current.text } : null, a: current ? current.mine : null, used: [...used] });
+    send({ t: 'hi', role });
+    send({ t: 'sync', cur: current, used: [...used] });
   };
   if (c.open) onOpen(); else c.on('open', onOpen);
   c.on('data', onData);
   c.on('close', () => {
     if (conn !== c) return;
-    setStatus(false, 'الطرف التاني خرج');
-    addMsg({ sys: true, text: (theirName || 'الطرف التاني') + ' خرج من الغرفة' });
-    if (!isHost) setTimeout(connectToHost, 2500);
+    conn = null; setStatus(false, theirName() + ' خرج');
+    addMsg({ sys: true, text: theirName() + ' خرج من الغرفة' });
+    if (!isHost) retry(1500);
   });
   c.on('error', () => {});
 }
 function send(obj) { try { if (conn && conn.open) conn.send(obj); } catch (e) {} }
-
 function setStatus(on, text) {
   $('dot').classList.toggle('on', !!on);
-  $('status').textContent = on ? ((theirName || 'الطرف التاني') + ' متصل') : (text || 'مستني الطرف التاني');
-  renderStage();
+  $('status').textContent = on ? (theirName() + ' متصل') : (text || 'بدور على ' + theirName() + '…');
 }
 
 /* ================= استقبال الرسايل ================= */
+const cleanCur = c => (c && typeof c === 'object' && (c.from === 'y' || c.from === 'm')) ? {
+  id: String(c.id).slice(0, 40), cat: String(c.cat).slice(0, 20), text: String(c.text).slice(0, 200),
+  from: c.from, ts: Number(c.ts) || 0, answer: c.answer == null ? null : String(c.answer).slice(0, 1000)
+} : null;
+
 function onData(m) {
   if (!m || typeof m !== 'object') return;
   switch (m.t) {
     case 'hi':
-      theirName = String(m.name || 'الطرف التاني').slice(0, 20);
       setStatus(true);
-      addMsg({ sys: true, text: theirName + ' دخل الغرفة' });
+      if (m.role === role) addMsg({ sys: true, text: 'الاتنين مختارين نفس الاسم. واحد فيكم يدوس "مش أنا".' });
+      else addMsg({ sys: true, text: theirName() + ' دخل الغرفة' });
       break;
-    case 'sync':
-      (m.used || []).forEach(x => used.add(x)); store.set('used', [...used]);
-      if (m.q && (QMAP[m.q.id] || m.q.cat === 'custom')) {
-        if (!current || current.id !== m.q.id) current = { id: m.q.id, cat: m.q.cat, text: String(m.q.text).slice(0, 200), mine: null, theirs: m.a == null ? null : String(m.a) };
-        else if (m.a != null) current.theirs = String(m.a);
-        checkReveal();
+    case 'sync': {
+      (m.used || []).forEach(x => used.add(String(x))); store.set('used', [...used]);
+      const c = cleanCur(m.cur);
+      if (c && (!current || c.ts > current.ts || (c.id === current.id && c.answer != null && current.answer == null))) {
+        current = c; saveHist();
       }
       renderStage(); renderQs();
       break;
-    case 'q':
-      current = { id: m.id, cat: m.cat, text: String(m.text).slice(0, 200), mine: null, theirs: null };
-      used.add(m.id); store.set('used', [...used]);
+    }
+    case 'q': {
+      const c = cleanCur({ id: m.id, cat: m.cat, text: m.text, from: m.from, ts: m.ts, answer: null });
+      if (!c) break;
+      current = c; used.add(c.id); store.set('used', [...used]);
       renderStage(); renderQs(); notify('سؤال جديد');
       break;
+    }
     case 'a':
-      if (current && current.id === m.qid) { current.theirs = String(m.text).slice(0, 1000); checkReveal(); renderStage(); notify('جاوب'); }
+      if (current && current.id === m.qid && current.answer == null) {
+        current.answer = String(m.text).slice(0, 1000); saveHist(); renderStage(); renderQs(); notify('إجابة جديدة');
+      }
+      break;
+    case 'cancel':
+      if (current && current.id === m.qid && current.answer == null) { current = null; renderStage(); renderQs(); }
       break;
     case 'chat':
-      addMsg({ from: theirName || 'الطرف التاني', text: String(m.text).slice(0, 500) });
-      if (activeTab !== 'chat' || window.innerWidth < 900) { unread++; updateBadge(); }
+      addMsg({ from: theirName(), text: String(m.text).slice(0, 500) });
+      if (activeTab !== 'chat' && window.innerWidth < 900) { unread++; updateBadge(); }
       notify('رسالة جديدة');
       break;
   }
 }
 function notify(label) {
   try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) {}
-  if (document.hidden) { document.title = '• ' + label + ' | صراحة مريم'; }
+  if (document.hidden) document.title = '• ' + label + ' | صراحة مريم';
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = 'صراحة مريم'; });
 
 /* ================= واجهة الغرفة ================= */
 function enterRoom() {
   $('lobby').hidden = true; $('room').hidden = false;
-  $('room-code').textContent = code;
+  $('pick-h').textContent = 'دوس على سؤال تسأله لـ ' + theirName();
   renderChips(); renderQs(); renderStage(); renderHist(); applyTab();
-  addMsg({ sys: true, text: isHost ? 'ابعت الكود أو اللينك للطرف التاني.' : 'دخلت الغرفة ' + code });
+  addMsg({ sys: true, text: 'أهلا يا ' + myName() + '. أول ما ' + theirName() + ' يفتح الصفحة هتتوصلوا لوحدكم.' });
 }
-$('btn-copy').onclick = async () => {
-  const url = location.origin + location.pathname + '?room=' + code;
-  try { await navigator.clipboard.writeText(url); $('btn-copy').textContent = 'اتنسخ'; }
-  catch (e) { $('btn-copy').textContent = code; }
-  setTimeout(() => $('btn-copy').textContent = 'انسخ اللينك', 1800);
-};
-
-/* tabs (موبايل) */
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => { activeTab = b.dataset.tab; if (activeTab === 'chat') { unread = 0; updateBadge(); } applyTab(); });
 function applyTab() {
   $('tab-play').setAttribute('aria-selected', activeTab === 'play');
@@ -509,45 +494,39 @@ function renderStage() {
   const s = $('stage'); if (!s) return;
   s.replaceChildren();
   if (!current) {
-    s.append(el('div', 'empty', 'لسه مفيش سؤال. دوس على أي سؤال من تحت، أو اختار "سؤال عشوائي". السؤال بيظهر عند الاتنين.'));
+    s.append(el('div', 'empty', 'لسه مفيش سؤال. اختار سؤال من تحت وابعته لـ ' + theirName() + '، أو استنى هو يسألك.'));
     return;
   }
-  s.append(el('div', 'cat', catName(current.cat)));
+  const mineQ = current.from === role;
+  s.append(el('div', 'cat', catName(current.cat) + ' · ' + (mineQ ? 'سؤالك لـ ' + theirName() : theirName() + (current.from === 'm' ? ' بتسألك' : ' بيسألك'))));
   s.append(el('div', 'q', current.text));
-  const them = theirName || 'الطرف التاني';
 
-  if (current.mine != null && current.theirs != null) {
-    const r = el('div', 'reveal');
-    const a1 = el('div', 'ans'); a1.append(el('div', 'who', myName + ' (إنت)'), el('div', 'txt', current.mine));
-    const a2 = el('div', 'ans'); a2.append(el('div', 'who', them), el('div', 'txt', current.theirs));
-    r.append(a1, a2); s.append(r);
-    const b = el('button', 'btn ghost small', 'اختار سؤال تاني من تحت');
-    b.onclick = () => { $('qlist').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  if (current.answer != null) {
+    const a = el('div', 'ans');
+    a.append(el('div', 'who', 'إجابة ' + (mineQ ? theirName() : myName() + ' (إنت)')), el('div', 'txt', current.answer));
+    s.append(a);
+    s.append(el('div', 'status-line', 'تقدروا تسألوا سؤال تاني من تحت.'));
+  } else if (mineQ) {
+    s.append(el('div', 'status-line', 'مستني إجابة ' + theirName() + '…'));
+    const b = el('button', 'btn ghost small', 'الغي السؤال');
+    b.onclick = () => { send({ t: 'cancel', qid: current.id }); current = null; renderStage(); renderQs(); };
     s.append(b);
-    return;
-  }
-  if (current.mine == null) {
+  } else {
     const box = el('div', 'ans-box');
     const ta = el('textarea', 'inp'); ta.id = 'my-ans'; ta.placeholder = 'اكتب إجابتك بصراحة…'; ta.maxLength = 1000;
     ta.setAttribute('aria-label', 'إجابتك');
     const btn = el('button', 'btn', 'ابعت إجابتي');
     btn.onclick = () => {
       const t = ta.value.trim(); if (!t) { ta.focus(); return; }
-      current.mine = t; send({ t: 'a', qid: current.id, text: t });
-      checkReveal(); renderStage();
+      current.answer = t; send({ t: 'a', qid: current.id, text: t });
+      saveHist(); renderStage(); renderQs();
     };
     box.append(ta, btn); s.append(box);
-  } else {
-    s.append(el('div', 'status-line', 'إجابتك اتبعتت. مستني ' + them + '…'));
-  }
-  if (current.mine == null) {
-    s.append(el('div', 'status-line', current.theirs != null ? them + ' جاوب، ومستنيك.' : them + ' لسه بيفكر. الإجابات بتظهر لما الاتنين يجاوبوا.'));
   }
 }
-function checkReveal() {
-  if (current && current.mine != null && current.theirs != null && !current._saved) {
-    current._saved = true;
-    history.unshift({ q: current.text, cat: current.cat, me: myName, mine: current.mine, them: theirName || 'الطرف التاني', theirs: current.theirs, ts: Date.now() });
+function saveHist() {
+  if (current && current.answer != null && !history.some(h => h.id === current.id)) {
+    history.unshift({ id: current.id, q: current.text, from: current.from, answer: current.answer, ts: Date.now() });
     history = history.slice(0, 200); store.set('history', history); renderHist();
   }
 }
@@ -563,10 +542,16 @@ function renderChips() {
 }
 function renderQs() {
   const l = $('qlist'); if (!l) return; l.replaceChildren();
+  const lock = pending();
+  const note = $('pick-note');
+  note.hidden = !lock;
+  if (lock) note.textContent = current.from === role ? 'مستني ' + theirName() + (role === 'y' ? ' تجاوب' : ' يجاوب') + '، وبعدها تسأل سؤال تاني.' : (role === 'm' ? 'جاوبي على سؤال ' + theirName() + ' الأول، وبعدها اسألي إنتي.' : 'جاوب على سؤال ' + theirName() + ' الأول، وبعدها اسأل إنت.');
+  $('btn-random').disabled = lock;
+  $('custom-q').disabled = lock; $('custom-form').querySelector('button').disabled = lock;
   const cat = CATS.find(c => c.id === activeCat);
   cat.qs.forEach((text, i) => {
     const q = QMAP[cat.id + i];
-    const b = el('button', 'qitem' + (used.has(q.id) ? ' done' : ''));
+    const b = el('button', 'qitem' + (used.has(q.id) ? ' done' : '')); b.disabled = lock;
     b.append(el('span', null, text));
     if (used.has(q.id)) b.append(el('span', 'tick', '✓'));
     b.onclick = () => pick(q);
@@ -574,37 +559,35 @@ function renderQs() {
   });
 }
 function pick(q) {
-  current = { id: q.id, cat: q.cat, text: q.text, mine: null, theirs: null };
+  if (pending()) return;
+  current = { id: q.id, cat: q.cat, text: q.text, from: role, ts: Date.now(), answer: null };
   used.add(q.id); store.set('used', [...used]);
-  send({ t: 'q', id: q.id, cat: q.cat, text: q.text });
+  send({ t: 'q', id: q.id, cat: q.cat, text: q.text, from: role, ts: current.ts });
   renderStage(); renderQs();
   $('stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 $('btn-random').onclick = () => {
   let pool = Object.values(QMAP).filter(q => !used.has(q.id));
-  if (!pool.length) { used.clear(); store.set('used', []); pool = Object.values(QMAP); renderQs(); }
+  if (!pool.length) { used.clear(); store.set('used', []); pool = Object.values(QMAP); }
   pick(pool[Math.floor(Math.random() * pool.length)]);
 };
 $('custom-form').onsubmit = e => {
   e.preventDefault();
-  const t = $('custom-q').value.trim(); if (!t) return;
-  const q = { id: 'c' + Date.now(), cat: 'custom', text: t };
+  const t = $('custom-q').value.trim(); if (!t || pending()) return;
   $('custom-q').value = '';
-  current = { id: q.id, cat: q.cat, text: q.text, mine: null, theirs: null };
-  send({ t: 'q', id: q.id, cat: q.cat, text: q.text });
-  renderStage();
+  pick({ id: 'c' + Date.now(), cat: 'custom', text: t });
 };
 
 /* السجل */
 function renderHist() {
   $('hist-n').textContent = history.length;
   const h = $('hist'); h.replaceChildren();
-  if (!history.length) { h.append(el('div', 'status-line', 'لسه مفيش. أول ما تجاوبوا هتتسجل هنا على موبايلك.')); return; }
+  if (!history.length) { h.append(el('div', 'status-line', 'لسه مفيش. أول ما حد يجاوب هيتسجل هنا على موبايلك.')); return; }
   history.forEach(x => {
+    const asker = NAMES[x.from], answerer = NAMES[x.from === 'y' ? 'm' : 'y'];
     const d = el('div', 'hist-item');
     d.append(el('div', 'hq', x.q));
-    const a = el('div', 'ha'); a.append(el('b', null, x.me + ': '), document.createTextNode(x.mine)); d.append(a);
-    const b = el('div', 'ha'); b.append(el('b', null, x.them + ': '), document.createTextNode(x.theirs)); d.append(b);
+    const a = el('div', 'ha'); a.append(el('b', null, asker + ' سأل ' + answerer + ' · جاوب: '), document.createTextNode(x.answer)); d.append(a);
     h.append(d);
   });
 }
@@ -622,14 +605,12 @@ $('chat-form').onsubmit = e => {
   e.preventDefault();
   const t = $('chat-in').value.trim(); if (!t) return;
   $('chat-in').value = '';
-  if (!(conn && conn.open)) { addMsg({ sys: true, text: 'الطرف التاني مش متصل دلوقتي.' }); return; }
+  if (!(conn && conn.open)) { addMsg({ sys: true, text: theirName() + ' مش متصل دلوقتي.' }); return; }
   send({ t: 'chat', text: t }); addMsg({ me: true, text: t });
 };
 
-/* لو اللينك فيه ?room= والاسم محفوظ، ادخل على طول */
-if (new URLSearchParams(location.search).get('room') && store.get('name', '')) {
-  lobbyErr('دوس "ادخل" عشان تدخل الغرفة.');
-}
+/* لو اختار اسمه قبل كده، يدخل على طول */
+if (role === 'y' || role === 'm') { enterRoom(); start(); } else { store.set('role', null); role = null; }
 </script>
 </body>
 </html>
