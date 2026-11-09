@@ -175,7 +175,7 @@
   <!-- ====== Lobby ====== -->
   <section id="lobby" class="glass">
     <h1>صراحة مريم</h1>
-    <p>كل واحد فيكم يختار للتاني سؤال، والتاني يجاوب بصراحة. من غير كود ولا تسجيل، افتحوا الصفحة بس.</p>
+    <p>أسئلة "مين فينا؟": كل واحد يختار بإيده، والنتيجة تظهر لما الاتنين يختاروا. من غير كود ولا تسجيل، افتحوا الصفحة بس.</p>
     <div class="role-btns">
       <button id="role-y" class="btn">أنا يوسف</button>
       <button id="role-m" class="btn">أنا مريم</button>
@@ -193,42 +193,13 @@
     </div>
 
     <div class="tabs" role="tablist">
-      <button class="tab" role="tab" id="tab-play" aria-selected="true" data-tab="play">الأسئلة</button>
+      <button class="tab" role="tab" id="tab-play" aria-selected="true" data-tab="play">مين فينا؟</button>
       <button class="tab" role="tab" id="tab-chat" aria-selected="false" data-tab="chat">الشات<span id="badge" class="badge" hidden>0</span></button>
     </div>
 
     <div class="layout">
       <div id="panel-play" class="glass panel">
-        <div class="modes" role="group" aria-label="نوع اللعبة">
-          <button id="mode-q" aria-pressed="true">اسأل التاني</button>
-          <button id="mode-v" aria-pressed="false">مين فينا؟</button>
-        </div>
-
-      <div id="mode-ask" class="inner">
-        <div id="stage" class="stage"></div>
-
-        <div>
-          <div class="section-h">
-            <h3 id="pick-h">دوس على سؤال تسأله</h3>
-            <button id="btn-random" class="btn ghost small">سؤال عشوائي</button>
-          </div>
-        </div>
-        <div id="chips" class="chips" role="group" aria-label="أقسام الأسئلة"></div>
-        <div id="qlist" class="qlist"></div>
-
-        <div id="pick-note" class="note" hidden></div>
-        <form id="custom-form" class="custom">
-          <input id="custom-q" class="inp" maxlength="200" placeholder="أو اكتب سؤالك بنفسك" autocomplete="off">
-          <button class="btn small" type="submit">ابعت</button>
-        </form>
-
-        <details class="hist">
-          <summary>اللي جاوبناه قبل كده (<span id="hist-n">0</span>)</summary>
-          <div id="hist" class="hist-list"></div>
-        </details>
-      </div>
-
-      <div id="mode-vote" class="inner" hidden>
+        <div id="mode-vote" class="inner">
         <div id="vstage" class="stage"></div>
         <div class="section-h">
           <h3>دوس على سؤال، وإنتوا الاتنين تختاروا</h3>
@@ -253,115 +224,6 @@
 </div>
 
 <script>
-/* ================= الأسئلة ================= */
-const CATS = [
-  { id: 'love', name: 'حب', qs: [
-    'أول مرة حسيت إنك بتحبني كانت إمتى؟ وإيه اللي حصل؟',
-    'إيه أكتر حاجة فيا بتخليك متعلق بيا؟',
-    'إيه أكتر كلمة بتحب تسمعها مني؟',
-    'بتغير عليا؟ وإمتى بتحس بالغيرة أكتر؟',
-    'لو هتوصف حبك ليا في جملة واحدة، هتقول إيه؟',
-    'إمتى آخر مرة اشتقتلي أوي؟',
-    'إيه أكتر حاجة بتخليك تحس إني بحبك؟',
-    'بتفضل الكلام الحلو ولا الأفعال؟ وليه؟',
-    'إيه أكتر لحظة حبيتني فيها أكتر من أي وقت؟',
-    'لو هتغير حاجة واحدة في علاقتنا، هتكون إيه؟',
-    'إيه أول انطباع خدته عني أول ما شوفتني؟',
-    'بتتخيل شكل حياتنا بعد عشر سنين إزاي؟',
-    'إيه أحلى حاجة عملتها عشانك وفضلت فاكرها؟',
-    'إيه الحاجة الصغيرة اللي بعملها وبتحبها وبتسكت عنها؟'
-  ]},
-  { id: 'deep', name: 'صراحة تقيلة', qs: [
-    'إيه أكتر حاجة فيك بتخاف تقولها لحد؟',
-    'في سر كبير فاكر إنك مش هتقدر تحكيه؟',
-    'إيه أكتر حاجة ندمان عليها في حياتك؟',
-    'إمتى آخر مرة كدبت عليا؟ وكدبت في إيه؟',
-    'في حاجة فيا مضايقاك ومش بتقولها؟',
-    'إيه أكتر حاجة بتخوفك في علاقتنا؟',
-    'إيه أكتر حاجة بتحس إنك مش كفاية فيها؟',
-    'في حد من ماضيك لسه بتفتكره؟ وليه؟',
-    'إيه أكتر تصرف مني زعلك وسكت؟',
-    'إيه أكتر حاجة بتخبيها عن الناس؟',
-    'لو هتعترف بحاجة واحدة دلوقتي، هتكون إيه؟',
-    'بتثق فيا لأي درجة من عشرة؟ وليه؟',
-    'إيه الحاجة اللي لو حصلت هتخليك تبعد؟',
-    'إيه أكتر حاجة بتخبيها عني لحد دلوقتي؟'
-  ]},
-  { id: 'memo', name: 'ذكريات', qs: [
-    'إيه أحلى يوم قضيناه سوا؟',
-    'إيه أكتر موقف ضحكنا فيه؟',
-    'أول حاجة فكرت فيها لما اتعرفنا؟',
-    'إيه أكتر مكان نفسك نروحه سوا؟',
-    'فاكر أول خناقة بينا؟ كانت على إيه؟',
-    'إيه أغنية بتفكرك بينا؟',
-    'إيه أحلى هدية خدتها في حياتك؟',
-    'إيه أكتر ذكرى من طفولتك بتحب ترجعلها؟',
-    'إيه أكتر موقف محرج حصلك قدامي؟',
-    'إيه أحسن أكلة أكلناها سوا؟',
-    'لو هنعيد يوم واحد من اللي فات، هنعيد أنهي يوم؟'
-  ]},
-  { id: 'future', name: 'أحلام ومستقبل', qs: [
-    'بتحلم تبقى فين بعد خمس سنين؟',
-    'إيه شكل البيت اللي نفسك فيه؟',
-    'نفسك في كام طفل؟ وهتسميهم إيه؟',
-    'إيه الشغل اللي كان نفسك فيه من صغرك؟',
-    'لو معاك فلوس كتير بكرة، أول حاجة هتعملها إيه؟',
-    'إيه أول بلد نفسك نسافرها سوا؟',
-    'إيه أكتر حاجة بتخاف منها في المستقبل؟',
-    'إيه الحاجة اللي نفسك تتعلمها؟',
-    'شايف علاقتنا هتوصل لفين؟',
-    'إيه الحاجة اللي عايز تحققها قبل آخر السنة؟'
-  ]},
-  { id: 'feel', name: 'مشاعر ومواقف', qs: [
-    'إيه اللي بيعصبك بسرعة؟',
-    'لما تزعل، بتحب أسيبك لوحدك ولا أقعد جنبك؟',
-    'إيه أكتر حاجة بتخليك تعيط؟',
-    'آخر مرة عيطت كانت إمتى وليه؟',
-    'إيه الحاجة اللي بتطمنك لما تبقى قلقان؟',
-    'بتتضايق لما أتأخر في الرد؟',
-    'إيه أكتر وقت حسيت فيه بالوحدة؟',
-    'إيه أكتر حاجة بتفرحك بسهولة؟',
-    'إيه أكتر حاجة بتتمنى حد يفهمها فيك؟'
-  ]},
-  { id: 'us', name: 'أنا وإنت', qs: [
-    'إيه أكتر حاجة بتحبها في شكلي؟',
-    'إيه عادة عندي بتضحكك؟',
-    'إيه عادة عندي بتضايقك؟',
-    'لو هتوصفني لواحد ميعرفنيش، هتقول إيه؟',
-    'إيه أحلى حاجة في ضحكتي؟',
-    'مين فينا بيحب أكتر؟ وليه؟',
-    'مين فينا بيعتذر الأول؟',
-    'إيه أكتر حاجة فيا بتحسدني عليها؟',
-    'لو هغير حاجة واحدة في نفسي عشانك، تحب تكون إيه؟'
-  ]},
-  { id: 'bold', name: 'جرأة خفيفة', qs: [
-    'لو هتعمل حاجة مجنونة معايا دلوقتي، هتكون إيه؟',
-    'إيه أكتر حاجة بتتكسف تطلبها مني؟',
-    'قول حاجة عمرك ما قلتهالي.',
-    'إيه أغرب حاجة بتخطر على بالك عني؟',
-    'إيه أكتر لبس بتحبه عليا؟',
-    'إيه أحلى حاجة بتحب نعملها لما نتقابل؟',
-    'اكتب رسالة حب في تلات سطور دلوقتي، من غير تفكير.',
-    'اكتب تلات حاجات بتحبها فيا من غير ما تفكر.'
-  ]},
-  { id: 'fun', name: 'هزار وخفة', qs: [
-    'لو هتاكل أكلة واحدة طول عمرك، هتبقى إيه؟',
-    'لو هتبقى حيوان، هتبقى إيه؟ وليه؟',
-    'إيه أغبى حاجة عملتها في حياتك؟',
-    'إيه أكتر كذبة بتقولها كتير؟',
-    'لو هتتحبس في جزيرة مع حد واحد غيري، مين؟',
-    'إيه أغرب عادة عندك؟',
-    'إيه الحاجة اللي بتأجلها لآخر لحظة دايمًا؟',
-    'إيه أول حاجة بتعملها لما تصحى؟',
-    'إيه أسوأ موقف محرج حصلك في حياتك؟',
-    'لو معاك قوة خارقة ليوم واحد، هتعمل بيها إيه؟'
-  ]}
-];
-// id ثابت لكل سؤال (قسم + رقم) عشان نعرف اللي اتسأل
-const QMAP = {};
-CATS.forEach(c => c.qs.forEach((text, i) => { QMAP[c.id + i] = { id: c.id + i, cat: c.id, text }; }));
-const catName = id => (CATS.find(c => c.id === id) || { name: 'سؤال مخصص' }).name;
-
 /* ================= مساعدات ================= */
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -377,15 +239,9 @@ const ROOM = 'sara7a-maryam-youssef-k7x2q9';      // غرفة ثابتة: مفي
 const NAMES = { y: 'يوسف', m: 'مريم' };
 let role = store.get('role', null);                // 'y' | 'm'
 let peer = null, conn = null, isHost = false, retryT = null;
-let current = null;                                // { id, cat, text, from, ts, answer }
-let used = new Set(store.get('used', []));
-let history = store.get('history', []);
-let activeCat = CATS[0].id;
 let unread = 0, activeTab = 'play';
 const myName = () => NAMES[role];
 const theirName = () => NAMES[role === 'y' ? 'm' : 'y'];
-const pending = () => current && current.answer == null;
-let mode = 'ask';
 let vote = null;                                   // { id, text, ts, votes: { y, m } }
 let vused = new Set(store.get('vused', []));
 let vhist = store.get('vhist', []);
@@ -434,7 +290,7 @@ function attach(c) {
     if (conn !== c) return;
     setStatus(true);
     send({ t: 'hi', role });
-    send({ t: 'sync', cur: current, used: [...used], vote });
+    send({ t: 'sync', vote });
   };
   if (c.open) onOpen(); else c.on('open', onOpen);
   c.on('data', onData);
@@ -453,11 +309,6 @@ function setStatus(on, text) {
 }
 
 /* ================= استقبال الرسايل ================= */
-const cleanCur = c => (c && typeof c === 'object' && (c.from === 'y' || c.from === 'm')) ? {
-  id: String(c.id).slice(0, 40), cat: String(c.cat).slice(0, 20), text: String(c.text).slice(0, 200),
-  from: c.from, ts: Number(c.ts) || 0, answer: c.answer == null ? null : String(c.answer).slice(0, 1000)
-} : null;
-
 function onData(m) {
   if (!m || typeof m !== 'object') return;
   switch (m.t) {
@@ -467,14 +318,8 @@ function onData(m) {
       else addMsg({ sys: true, text: theirName() + ' دخل الغرفة' });
       break;
     case 'sync': {
-      (m.used || []).forEach(x => used.add(String(x))); store.set('used', [...used]);
-      const c = cleanCur(m.cur);
-      if (c && (!current || c.ts > current.ts || (c.id === current.id && c.answer != null && current.answer == null))) {
-        current = c; saveHist();
-      }
-      renderStage(); renderQs();
       const v = cleanVote(m.vote);
-      if (v) { mergeVote(v); }
+      if (v) mergeVote(v);
       break;
     }
     case 'vq': {
@@ -489,21 +334,6 @@ function onData(m) {
       break;
     case 'vskip':
       if (vote && vote.id === m.qid) { vote = null; renderVote(); }
-      break;
-    case 'q': {
-      const c = cleanCur({ id: m.id, cat: m.cat, text: m.text, from: m.from, ts: m.ts, answer: null });
-      if (!c) break;
-      current = c; used.add(c.id); store.set('used', [...used]);
-      renderStage(); renderQs(); notify('سؤال جديد');
-      break;
-    }
-    case 'a':
-      if (current && current.id === m.qid && current.answer == null) {
-        current.answer = String(m.text).slice(0, 1000); saveHist(); renderStage(); renderQs(); notify('إجابة جديدة');
-      }
-      break;
-    case 'cancel':
-      if (current && current.id === m.qid && current.answer == null) { current = null; renderStage(); renderQs(); }
       break;
     case 'chat':
       addMsg({ from: theirName(), text: String(m.text).slice(0, 500) });
@@ -521,8 +351,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) docu
 /* ================= واجهة الغرفة ================= */
 function enterRoom() {
   $('lobby').hidden = true; $('room').hidden = false;
-  $('pick-h').textContent = 'دوس على سؤال تسأله لـ ' + theirName();
-  renderChips(); renderQs(); renderStage(); renderHist(); applyTab();
+  renderVote(); applyTab();
   addMsg({ sys: true, text: 'أهلا يا ' + myName() + '. أول ما ' + theirName() + ' يفتح الصفحة هتتوصلوا لوحدكم.' });
 }
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => { activeTab = b.dataset.tab; if (activeTab === 'chat') { unread = 0; updateBadge(); } applyTab(); });
@@ -535,95 +364,6 @@ function applyTab() {
 }
 function updateBadge() { $('badge').hidden = unread === 0; $('badge').textContent = unread; }
 window.addEventListener('resize', () => { if (window.innerWidth >= 900) { unread = 0; updateBadge(); } });
-
-/* السؤال الحالي */
-function renderStage() {
-  const s = $('stage'); if (!s) return;
-  s.replaceChildren();
-  if (!current) {
-    s.append(el('div', 'empty', 'لسه مفيش سؤال. اختار سؤال من تحت وابعته لـ ' + theirName() + '، أو استنى هو يسألك.'));
-    return;
-  }
-  const mineQ = current.from === role;
-  s.append(el('div', 'cat', catName(current.cat) + ' · ' + (mineQ ? 'سؤالك لـ ' + theirName() : theirName() + (current.from === 'm' ? ' بتسألك' : ' بيسألك'))));
-  s.append(el('div', 'q', current.text));
-
-  if (current.answer != null) {
-    const a = el('div', 'ans');
-    a.append(el('div', 'who', 'إجابة ' + (mineQ ? theirName() : myName() + ' (إنت)')), el('div', 'txt', current.answer));
-    s.append(a);
-    s.append(el('div', 'status-line', 'تقدروا تسألوا سؤال تاني من تحت.'));
-  } else if (mineQ) {
-    s.append(el('div', 'status-line', 'مستني إجابة ' + theirName() + '…'));
-    const b = el('button', 'btn ghost small', 'الغي السؤال');
-    b.onclick = () => { send({ t: 'cancel', qid: current.id }); current = null; renderStage(); renderQs(); };
-    s.append(b);
-  } else {
-    const box = el('div', 'ans-box');
-    const ta = el('textarea', 'inp'); ta.id = 'my-ans'; ta.placeholder = 'اكتب إجابتك بصراحة…'; ta.maxLength = 1000;
-    ta.setAttribute('aria-label', 'إجابتك');
-    const btn = el('button', 'btn', 'ابعت إجابتي');
-    btn.onclick = () => {
-      const t = ta.value.trim(); if (!t) { ta.focus(); return; }
-      current.answer = t; send({ t: 'a', qid: current.id, text: t });
-      saveHist(); renderStage(); renderQs();
-    };
-    box.append(ta, btn); s.append(box);
-  }
-}
-function saveHist() {
-  if (current && current.answer != null && !history.some(h => h.id === current.id)) {
-    history.unshift({ id: current.id, q: current.text, from: current.from, answer: current.answer, ts: Date.now() });
-    history = history.slice(0, 200); store.set('history', history); renderHist();
-  }
-}
-
-/* قايمة الأسئلة */
-function renderChips() {
-  const c = $('chips'); c.replaceChildren();
-  CATS.forEach(cat => {
-    const b = el('button', 'chip', cat.name); b.setAttribute('aria-pressed', cat.id === activeCat);
-    b.onclick = () => { activeCat = cat.id; renderChips(); renderQs(); };
-    c.append(b);
-  });
-}
-function renderQs() {
-  const l = $('qlist'); if (!l) return; l.replaceChildren();
-  const lock = pending();
-  const note = $('pick-note');
-  note.hidden = !lock;
-  if (lock) note.textContent = current.from === role ? 'مستني ' + theirName() + (role === 'y' ? ' تجاوب' : ' يجاوب') + '، وبعدها تسأل سؤال تاني.' : (role === 'm' ? 'جاوبي على سؤال ' + theirName() + ' الأول، وبعدها اسألي إنتي.' : 'جاوب على سؤال ' + theirName() + ' الأول، وبعدها اسأل إنت.');
-  $('btn-random').disabled = lock;
-  $('custom-q').disabled = lock; $('custom-form').querySelector('button').disabled = lock;
-  const cat = CATS.find(c => c.id === activeCat);
-  cat.qs.forEach((text, i) => {
-    const q = QMAP[cat.id + i];
-    const b = el('button', 'qitem' + (used.has(q.id) ? ' done' : '')); b.disabled = lock;
-    b.append(el('span', null, text));
-    if (used.has(q.id)) b.append(el('span', 'tick', '✓'));
-    b.onclick = () => pick(q);
-    l.append(b);
-  });
-}
-function pick(q) {
-  if (pending()) return;
-  current = { id: q.id, cat: q.cat, text: q.text, from: role, ts: Date.now(), answer: null };
-  used.add(q.id); store.set('used', [...used]);
-  send({ t: 'q', id: q.id, cat: q.cat, text: q.text, from: role, ts: current.ts });
-  renderStage(); renderQs();
-  $('stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-$('btn-random').onclick = () => {
-  let pool = Object.values(QMAP).filter(q => !used.has(q.id));
-  if (!pool.length) { used.clear(); store.set('used', []); pool = Object.values(QMAP); }
-  pick(pool[Math.floor(Math.random() * pool.length)]);
-};
-$('custom-form').onsubmit = e => {
-  e.preventDefault();
-  const t = $('custom-q').value.trim(); if (!t || pending()) return;
-  $('custom-q').value = '';
-  pick({ id: 'c' + Date.now(), cat: 'custom', text: t });
-};
 
 /* ================= مين فينا؟ ================= */
 const cleanVote = v => (v && typeof v === 'object' && v.id) ? {
@@ -642,14 +382,6 @@ function saveVote() {
     vhist = vhist.slice(0, 300); store.set('vhist', vhist);
   }
 }
-function setMode(m) {
-  mode = m;
-  $('mode-ask').hidden = m !== 'ask'; $('mode-vote').hidden = m !== 'vote';
-  $('mode-q').setAttribute('aria-pressed', m === 'ask'); $('mode-v').setAttribute('aria-pressed', m === 'vote');
-  if (m === 'vote') renderVote();
-}
-$('mode-q').onclick = () => setMode('ask');
-$('mode-v').onclick = () => setMode('vote');
 const pickedWord = who => who === 'm' ? 'اختارت' : 'اختار';
 
 function renderVote() {
@@ -722,20 +454,6 @@ $('v-random').onclick = () => {
   if (!pool.length) { vused.clear(); store.set('vused', []); pool = VQS; }
   vpick(pool[Math.floor(Math.random() * pool.length)]);
 };
-
-/* السجل */
-function renderHist() {
-  $('hist-n').textContent = history.length;
-  const h = $('hist'); h.replaceChildren();
-  if (!history.length) { h.append(el('div', 'status-line', 'لسه مفيش. أول ما حد يجاوب هيتسجل هنا على موبايلك.')); return; }
-  history.forEach(x => {
-    const asker = NAMES[x.from], answerer = NAMES[x.from === 'y' ? 'm' : 'y'];
-    const d = el('div', 'hist-item');
-    d.append(el('div', 'hq', x.q));
-    const a = el('div', 'ha'); a.append(el('b', null, asker + ' سأل ' + answerer + ' · جاوب: '), document.createTextNode(x.answer)); d.append(a);
-    h.append(d);
-  });
-}
 
 /* الشات */
 function addMsg(m) {
